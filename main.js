@@ -1,8 +1,10 @@
 import './style.css'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
-import fragmentShader from './shaders/fragment.frag?raw'
-import vertexShader from './shaders/vertex.vert?raw'
+import sphereFragmentShader from './shaders/sphere/fragment.frag?raw'
+import sphereVertexShader from './shaders/sphere/vertex.vert?raw'
+import particlesFragmentShader from './shaders/particles/fragment.frag?raw'
+import particlesVertexShader from './shaders/particles/vertex.vert?raw'
 
 const size = {
   width: window.innerWidth,
@@ -19,7 +21,7 @@ const canvas = document.getElementById('webGL')
 const scene = new THREE.Scene()
 const camera = new THREE.PerspectiveCamera()
 const controls = new OrbitControls(camera, canvas)
-const renderer = new THREE.WebGLRenderer({ canvas })
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true })
 const clock = new THREE.Clock()
 
 controls.enableDamping = true
@@ -28,23 +30,54 @@ camera.fov = 75
 camera.aspect = size.width / size.height
 camera.far = 100
 camera.near = 0.1
-camera.position.set(1, 1, 1)
+camera.position.set(0, 0, 3.5)
 
 scene.add(camera)
 
-const cubeGeometry = new THREE.BoxBufferGeometry(1, 1, 1)
-const cubeMaterial = new THREE.ShaderMaterial({
-  vertexShader,
-  fragmentShader,
+const sphereGeometry = new THREE.SphereBufferGeometry(1, 512, 512)
+const sphereMaterial = new THREE.ShaderMaterial({
+  vertexShader: sphereVertexShader,
+  fragmentShader: sphereFragmentShader,
   uniforms: {
     uTime: { value: 0 },
   },
 })
-const cubeMesh = new THREE.Mesh(cubeGeometry, cubeMaterial)
+const sphereMesh = new THREE.Mesh(sphereGeometry, sphereMaterial)
+scene.add(sphereMesh)
 
-cubeMaterial.color = new THREE.Color('#fa0')
+const Points = 3000
+const positions = new Float32Array(Points * 3)
+const incGoldenRatio = Math.PI * (3 - Math.sqrt(5))
+const offset = 2 / Points
+const rad = 1.7
 
-scene.add(cubeMesh)
+for (let i = 0; i < Points; i++) {
+  const index = i * 3
+  const y = i * offset - 1 + offset / 2
+  const r = Math.sqrt(1 - y ** 2)
+  const phi = i * incGoldenRatio
+
+  positions.set(
+    [rad * Math.cos(phi) * r, rad * y, rad * Math.sin(phi) * r],
+    index
+  )
+}
+
+const pointGeometry = new THREE.BufferGeometry()
+const pointMaterial = new THREE.ShaderMaterial({
+  fragmentShader: particlesFragmentShader,
+  vertexShader: particlesVertexShader,
+  uniforms: {
+    uTime: { value: 0 },
+  },
+  depthTest: true,
+  depthWrite: true,
+  transparent: true,
+})
+console.log(positions)
+pointGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3))
+const pointMesh = new THREE.Points(pointGeometry, pointMaterial)
+scene.add(pointMesh)
 
 function resizeHandler() {
   size.height = window.innerHeight
@@ -63,8 +96,9 @@ window.addEventListener('resize', resizeHandler)
 function tick() {
   const elapsedTime = clock.getElapsedTime()
 
-  cubeMaterial.uniforms.uTime.value = elapsedTime
-  cubeMesh.rotation.y = elapsedTime / 5.0
+  sphereMaterial.uniforms.uTime.value = elapsedTime
+  pointMaterial.uniforms.uTime.value = elapsedTime
+  pointMesh.rotation.y = elapsedTime / 10
 
   controls.update()
 
